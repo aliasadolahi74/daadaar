@@ -1,45 +1,135 @@
-import { Button } from "@/components/ui/button"
+"use client"
 
-export default function Home() {
+import { useState } from "react"
+import { useRouter } from "next/navigation"
+import { Check, ChevronsUpDown, X } from "lucide-react"
+import { Card, CardHeader, CardTitle, CardContent } from "core/components/ui/card"
+import { Button } from "core/components/ui/button"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "core/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "core/components/ui/popover"
+import { cn } from "@/src/lib/utils"
+import { useCourts } from "@/src/lib/api/courts"
+
+export default function Homepage() {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [selectedCourts, setSelectedCourts] = useState<string[]>([])
+  
+  const { data: courts = [], isLoading, error } = useCourts()
+
+  const toggleCourt = (id: string) => {
+    setSelectedCourts((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    )
+  }
+
+  const removeCourt = (id: string) => {
+    setSelectedCourts((prev) => prev.filter((v) => v !== id))
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedCourts.length > 0) {
+      const params = new URLSearchParams()
+      params.set("courts", selectedCourts.join(","))
+      router.push(`/districts?${params.toString()}`)
+    }
+  }
+
+  if (error) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-destructive text-center">خطا در دریافت اطلاعات</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen p-8 font-vazirmatn">
-      <main className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold mb-8 text-center">
-          Welcome to Daadaar Frontend
-        </h1>
-        
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="p-6 border rounded-lg">
-            <h2 className="text-2xl font-semibold mb-4">✅ Installations Complete</h2>
-            <ul className="space-y-2">
-              <li>• shadcn/ui - UI component library</li>
-              <li>• Tailwind CSS v4 - Utility-first CSS</li>
-              <li>• Vazirmatn Font - Persian/Arabic typography</li>
-              <li>• MapLibre GL - Interactive maps</li>
-            </ul>
-          </div>
-          
-          <div className="p-6 border rounded-lg">
-            <h2 className="text-2xl font-semibold mb-4">🧪 Test Components</h2>
-            <div className="space-y-4">
-              <Button>shadcn/ui Button</Button>
-              <div className="p-4 bg-secondary rounded">
-                <p className="font-vazirmatn">
-                  This text uses Vazirmatn font
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="mt-8 p-6 border rounded-lg">
-          <h2 className="text-2xl font-semibold mb-4">🗺️ MapLibre Ready</h2>
-          <p className="text-muted-foreground">
-            MapLibre GL is installed and ready for interactive maps. 
-            CSS is imported in globals.css.
-          </p>
-        </div>
-      </main>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>انتخاب خدمت</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Popover open={open} onOpenChange={setOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={open}
+                  className="w-full justify-between h-auto min-h-10"
+                  disabled={isLoading}
+                >
+                  <div className="flex flex-wrap gap-1 flex-1 text-right">
+                    {isLoading ? (
+                      <span className="text-muted-foreground">در حال بارگذاری...</span>
+                    ) : selectedCourts.length > 0 ? (
+                      selectedCourts.map((id) => {
+                        const court = courts.find((c) => c.id === id)
+                        return (
+                          <span
+                            key={id}
+                            className="inline-flex items-center gap-1 rounded-md bg-secondary px-2 py-0.5 text-xs font-medium"
+                          >
+                            {court?.name}
+                            <X
+                              className="h-3 w-3 cursor-pointer hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                removeCourt(id)
+                              }}
+                            />
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <span className="text-muted-foreground">خدمت را انتخاب کنید...</span>
+                    )}
+                  </div>
+                  <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                <Command>
+                  <CommandInput placeholder="جستجوی دادگاه..." />
+                  <CommandList>
+                    <CommandEmpty>دادگاهی یافت نشد.</CommandEmpty>
+                    <CommandGroup>
+                      {courts.map((court) => (
+                        <CommandItem
+                          key={court.id}
+                          value={court.name}
+                          onSelect={() => toggleCourt(court.id)}
+                        >
+                          <Check
+                            className={cn(
+                              "ml-2 h-4 w-4",
+                              selectedCourts.includes(court.id) ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {court.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={selectedCourts.length === 0 || isLoading}
+            >
+              ثبت
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
     </div>
-  );
+  )
 }
