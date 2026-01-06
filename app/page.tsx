@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { Check, ChevronsUpDown, X } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardContent } from "core/components/ui/card"
 import { Button } from "core/components/ui/button"
@@ -49,8 +50,13 @@ export default function Homepage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
-      <Card className="w-full max-w-md">
+    <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-gradient-to-b from-background to-secondary/20">
+      <div className="flex flex-col items-center gap-2 mb-6 md:mb-8">
+        <Image src="/logo.svg" alt="دادار" width={56} height={56} className="md:w-16 md:h-16" />
+        <h1 className="text-3xl md:text-4xl font-bold text-primary">دادار</h1>
+        <p className="text-sm text-muted-foreground">سامانه یافتن حوزه قضایی</p>
+      </div>
+      <Card className="w-full max-w-md shadow-lg">
         <CardHeader>
           <CardTitle>انتخاب خدمت</CardTitle>
         </CardHeader>

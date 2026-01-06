@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Location pin shape -->
+  <path d="M32 4C20.954 4 12 12.954 12 24c0 14 20 36 20 36s20-22 20-36c0-11.046-8.954-20-20-20z" fill="hsl(217, 91%, 50%)" />
+  
+  <!-- Scale of justice -->
+  <g fill="white" stroke="white" stroke-width="1">
+    <!-- Center pillar -->
+    <rect x="30" y="18" width="4" height="20" rx="1" />
+    <!-- Base -->
+    <rect x="24" y="36" width="16" height="3" rx="1" />
+    <!-- Top beam -->
+    <rect x="20" y="16" width="24" height="3" rx="1" />
+    <!-- Left pan -->
+    <circle cx="22" cy="28" r="5" fill="none" stroke="white" stroke-width="2" />
+    <line x1="22" y1="18" x2="22" y2="23" stroke-width="1.5" />
+    <!-- Right pan -->
+    <circle cx="42" cy="28" r="5" fill="none" stroke="white" stroke-width="2" />
+    <line x1="42" y1="18" x2="42" y2="23" stroke-width="1.5" />
+  </g>
+</svg>
