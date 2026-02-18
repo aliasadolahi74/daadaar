@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
-import { Search } from "lucide-react";
+import { Search, Loader2, MapPin } from "lucide-react";
+import { toPersianDigits } from "@/src/lib/persian-numbers";
+import { useGeocoding, GeocodingExtent } from "@/src/lib/api/geocoding";
 
 export interface PolygonData {
   id: string;
@@ -18,6 +20,7 @@ interface MapProps {
   onCenterChange?: (lng: number, lat: number) => void;
   polygons?: PolygonData[];
   focusPolygonId?: string | null;
+  isLoading?: boolean;
 }
 
 // Parse WKT polygon string to GeoJSON coordinates
@@ -74,11 +77,15 @@ export default function Map({
   onCenterChange,
   polygons = [],
   focusPolygonId,
+  isLoading = false,
 }: MapProps) {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const onCenterChangeRef = useRef(onCenterChange);
   const isProgrammaticMoveRef = useRef(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [mapBounds, setMapBounds] = useState<GeocodingExtent | null>(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 500);
 
   useEffect(() => {
@@ -86,12 +93,44 @@ export default function Map({
   }, [onCenterChange]);
 
   // Handle debounced search
+  const { data: searchResults, isLoading: isSearching } = useGeocoding(
+    debouncedSearch.trim().length > 2 && mapBounds
+      ? { address: debouncedSearch, extent: mapBounds }
+      : null
+  );
+
   useEffect(() => {
-    if (debouncedSearch) {
-      console.log("[Map] Search query:", debouncedSearch);
-      // TODO: Implement geocoding search here
+    if (debouncedSearch.trim().length > 2) {
+      setShowSearchResults(true);
     }
   }, [debouncedSearch]);
+
+  const handleSearchResultClick = (result: any) => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    isProgrammaticMoveRef.current = true;
+    map.flyTo({
+      center: [result.location.longitude, result.location.latitude],
+      zoom: 16,
+      duration: 1500,
+    });
+
+    setSearchQuery("");
+    setShowSearchResults(false);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const containerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -127,14 +166,39 @@ export default function Map({
           if (onCenterChangeRef.current) {
             onCenterChangeRef.current(mapCenter.lng, mapCenter.lat);
           }
+
+          // Update bounds for search
+          const bounds = map.getBounds();
+          setMapBounds({
+            southWest: {
+              latitude: bounds.getSouth(),
+              longitude: bounds.getWest(),
+            },
+            northEast: {
+              latitude: bounds.getNorth(),
+              longitude: bounds.getEast(),
+            },
+          });
         });
 
-        // Initial center emit
+        // Initial center emit and bounds
         map.on("load", () => {
           const mapCenter = map.getCenter();
           if (onCenterChangeRef.current) {
             onCenterChangeRef.current(mapCenter.lng, mapCenter.lat);
           }
+
+          const bounds = map.getBounds();
+          setMapBounds({
+            southWest: {
+              latitude: bounds.getSouth(),
+              longitude: bounds.getWest(),
+            },
+            northEast: {
+              latitude: bounds.getNorth(),
+              longitude: bounds.getEast(),
+            },
+          });
         });
 
         mapRef.current = map;
@@ -149,6 +213,9 @@ export default function Map({
     if (!map) return;
 
     const updatePolygons = () => {
+      // Ensure map and style are fully loaded
+      if (!map.isStyleLoaded()) return;
+
       const features = polygons
         .map((item, index) => {
           const coordinates = parseWKTPolygon(item.polygon);
@@ -169,8 +236,10 @@ export default function Map({
       const source = map.getSource(POLYGONS_SOURCE_ID) as maplibregl.GeoJSONSource;
 
       if (source) {
+        // Source exists, just update data
         source.setData(geojson);
       } else {
+        // Create source and layers
         map.addSource(POLYGONS_SOURCE_ID, { type: "geojson", data: geojson });
 
         map.addLayer({
@@ -213,28 +282,45 @@ export default function Map({
       }
     };
 
+    // Wait for style to load before updating
     if (map.isStyleLoaded()) {
       updatePolygons();
     } else {
-      map.on("load", updatePolygons);
+      const onLoad = () => {
+        updatePolygons();
+        map.off("load", onLoad);
+      };
+      map.on("load", onLoad);
     }
+
+    // Also listen for style changes
+    const onStyleData = () => {
+      if (map.isStyleLoaded()) {
+        updatePolygons();
+      }
+    };
+    map.on("styledata", onStyleData);
+
+    return () => {
+      map.off("styledata", onStyleData);
+    };
   }, [polygons]);
 
-  // Focus on specific polygon
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !focusPolygonId) return;
+  // Focus on specific polygon - removed automatic fitting
+  // useEffect(() => {
+  //   const map = mapRef.current;
+  //   if (!map || !focusPolygonId) return;
 
-    const polygon = polygons.find((p) => p.id === focusPolygonId);
-    if (!polygon) return;
+  //   const polygon = polygons.find((p) => p.id === focusPolygonId);
+  //   if (!polygon) return;
 
-    const coords = parseWKTPolygon(polygon.polygon);
-    if (!coords) return;
+  //   const coords = parseWKTPolygon(polygon.polygon);
+  //   if (!coords) return;
 
-    const bounds = getBoundsFromCoords(coords);
-    isProgrammaticMoveRef.current = true;
-    map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-  }, [focusPolygonId, polygons]);
+  //   const bounds = getBoundsFromCoords(coords);
+  //   isProgrammaticMoveRef.current = true;
+  //   map.fitBounds(bounds, { padding: 50, maxZoom: 15 });
+  // }, [focusPolygonId, polygons]);
 
   return (
     <div 
@@ -252,15 +338,79 @@ export default function Map({
     >
       {/* Search bar */}
       <div className="absolute top-4 right-4 left-14 md:left-4 z-10">
-        <div className="relative max-w-md ms-auto md:mx-auto">
+        <div ref={searchContainerRef} className="relative max-w-md ms-auto md:mx-auto">
           <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="جستجوی مکان‌ها"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => {
+              if (debouncedSearch.trim().length > 2) {
+                setShowSearchResults(true);
+              }
+            }}
             className="w-full h-10 pr-10 pl-4 rounded-lg border border-input bg-background shadow-md text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
           />
+
+          {/* Search results dropdown */}
+          {showSearchResults && searchQuery.trim().length > 2 && (
+            <div className="absolute top-full mt-2 w-full bg-background border border-border rounded-lg shadow-lg max-h-80 overflow-y-auto">
+              {isSearching ? (
+                <div className="flex items-center justify-center py-4 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                  <span className="text-sm">در حال جستجو...</span>
+                </div>
+              ) : searchResults && searchResults.items.length > 0 ? (
+                <ul>
+                  {searchResults.items.map((result, index) => (
+                    <li
+                      key={index}
+                      onClick={() => handleSearchResultClick(result)}
+                      className="px-4 py-3 hover:bg-secondary/50 cursor-pointer border-b border-border last:border-b-0 transition-colors"
+                    >
+                      <div className="flex items-start gap-2">
+                        <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-foreground">
+                            {result.neighbourhood}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {result.city}، {result.province}
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="px-4 py-4 text-center text-sm text-muted-foreground">
+                  نتیجه‌ای یافت نشد
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Results count badge */}
+      <div className="absolute top-20 right-4 z-10">
+        <div className="bg-background/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-md">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">در حال جستجو...</span>
+            </div>
+          ) : polygons.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+              <span className="text-sm font-medium text-foreground">
+                {toPersianDigits(polygons.length)} نتیجه
+              </span>
+            </div>
+          ) : (
+            <span className="text-sm text-muted-foreground">نتیجه‌ای یافت نشد</span>
+          )}
         </div>
       </div>
 

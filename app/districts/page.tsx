@@ -17,6 +17,7 @@ const GPS_PROMPT_KEY = "gps_prompt_dismissed";
 function DistrictsContent() {
   const searchParams = useSearchParams();
   const [mapCenter, setMapCenter] = useState<[number, number] | null>(null);
+  const [debouncedMapCenter, setDebouncedMapCenter] = useState<[number, number] | null>(null);
   const [initialCenter, setInitialCenter] = useState<[number, number]>(AZADI_SQUARE);
   const [isLoadingLocation, setIsLoadingLocation] = useState(true);
   const [focusPolygonId, setFocusPolygonId] = useState<string | null>(null);
@@ -29,6 +30,24 @@ function DistrictsContent() {
   const judicialIds = courtsParam
     ? courtsParam.split(",").filter((id) => id.trim().length > 0)
     : [];
+
+  const [isDebouncing, setIsDebouncing] = useState(false);
+
+  // Debounce map center changes to reduce API calls
+  useEffect(() => {
+    if (!mapCenter) return;
+    
+    setIsDebouncing(true);
+    const timer = setTimeout(() => {
+      setDebouncedMapCenter(mapCenter);
+      setIsDebouncing(false);
+    }, 500); // Wait 500ms after user stops dragging
+
+    return () => {
+      clearTimeout(timer);
+      setIsDebouncing(false);
+    };
+  }, [mapCenter]);
 
   // Check if GPS prompt was dismissed and show it if not
   useEffect(() => {
@@ -83,13 +102,13 @@ function DistrictsContent() {
     setMapCenter([lng, lat]);
   }, []);
 
-  // Call court find API
+  // Call court find API with debounced center
   const { data: courts, isLoading, error } = useCourtFind(
-    mapCenter && judicialIds.length > 0
+    debouncedMapCenter && judicialIds.length > 0
       ? {
           judicial_ids: judicialIds,
-          latitude: mapCenter[1],
-          longitude: mapCenter[0],
+          latitude: debouncedMapCenter[1],
+          longitude: debouncedMapCenter[0],
         }
       : null
   );
@@ -224,6 +243,7 @@ function DistrictsContent() {
           onCenterChange={handleCenterChange}
           polygons={polygons}
           focusPolygonId={focusPolygonId}
+          isLoading={isDebouncing || isLoading}
         />
       </div>
 

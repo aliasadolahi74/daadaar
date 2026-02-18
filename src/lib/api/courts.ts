@@ -96,7 +96,8 @@ export const useCourtFind = (params: CourtFindParams | null) => {
     queryKey: params ? courtKeys.find(params) : ["courts", "find"],
     queryFn: () => courtsApi.find(params!),
     enabled: !!params && params.judicial_ids.length > 0,
-    staleTime: 0,
-    gcTime: 0,
+    staleTime: 30000, // Cache for 30 seconds to reduce unnecessary refetches
+    gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 };

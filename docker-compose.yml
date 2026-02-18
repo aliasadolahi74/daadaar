@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  daadaar-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+        - NEXT_PUBLIC_NESHAN_API_URL=${NEXT_PUBLIC_NESHAN_API_URL:-https://api.neshan.org/geocoding/v1}
+        - NEXT_PUBLIC_NESHAN_API_KEY=${NEXT_PUBLIC_NESHAN_API_KEY}
+    container_name: daadaar-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api}
+      - NEXT_PUBLIC_NESHAN_API_URL=${NEXT_PUBLIC_NESHAN_API_URL:-https://api.neshan.org/geocoding/v1}
+      - NEXT_PUBLIC_NESHAN_API_KEY=${NEXT_PUBLIC_NESHAN_API_KEY}
+    env_file:
+      - .env.local
+    networks:
+      - daadaar-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  daadaar-network:
+    driver: bridge
